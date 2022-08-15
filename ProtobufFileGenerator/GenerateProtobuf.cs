@@ -38,7 +38,16 @@ namespace ProtobufFileGenerator
                     CheckEnum(enums, properties[i].PropertyType);
                     if (CheckCollection(properties[i]))
                     {
-                        var genericType = properties[i].PropertyType.GenericTypeArguments[0];
+                        Type genericType = null;
+                        if (properties[i].PropertyType.IsArray)
+                        {
+                            genericType = properties[i].PropertyType.GetElementType();
+                        }
+                        else
+                        {
+                            genericType = properties[i].PropertyType.GenericTypeArguments[0];
+                        }
+                        
                         CheckEnum(enums, genericType);
                         if (!CheckSystemType(genericType))
                         {
@@ -48,7 +57,10 @@ namespace ProtobufFileGenerator
                                 typesAddedToProtoFile.Add(genericType);
                             }
                         }
-                        AppendPropertyToString(protoStr, properties[i], i + 1, " repeated", true);
+                        if(properties[i].PropertyType.IsArray)
+                            AppendPropertyToString(protoStr, properties[i], i + 1, " repeated", true, true);
+                        else
+                            AppendPropertyToString(protoStr, properties[i], i + 1, " repeated", true, false);
                     }
                     else
                     {
@@ -60,7 +72,7 @@ namespace ProtobufFileGenerator
                                 typesAddedToProtoFile.Add(properties[i].PropertyType);
                             }
                         }
-                        AppendPropertyToString(protoStr, properties[i], i + 1, string.Empty, false);
+                        AppendPropertyToString(protoStr, properties[i], i + 1, string.Empty, false, false);
                     }
                 }
                 protoStr.AppendLine("}");
@@ -110,29 +122,43 @@ namespace ProtobufFileGenerator
             return property.FullName.StartsWith("System");
         }
 
-        private static void AppendPropertyToString(StringBuilder protoStr, PropertyInfo propertyInfo, int num, string preTypeName, bool isCollection)
+        private static void AppendPropertyToString(StringBuilder protoStr, PropertyInfo propertyInfo, int num, string preTypeName, bool isCollection, bool isArray)
         {
-            protoStr.AppendLine($"  {preTypeName} {GetTypeName(propertyInfo, isCollection)} {propertyInfo.Name.Substring(0, 1).ToLower() + propertyInfo.Name.Substring(1)} = {num};");
+            protoStr.AppendLine($"  {preTypeName} {GetTypeName(propertyInfo, isCollection, isArray)} {propertyInfo.Name.Substring(0, 1).ToLower() + propertyInfo.Name.Substring(1)} = {num};");
         }
         private static bool CheckCollection(System.Reflection.PropertyInfo property)
         {
             return typeof(IEnumerable).IsAssignableFrom(property.PropertyType) && property.PropertyType != typeof(string);
         }
 
-        private static string GetTypeName(PropertyInfo propertyInfo, bool isCollection)
+        private static string GetTypeName(PropertyInfo propertyInfo, bool isCollection, bool isArray)
         {
             ProtofileGenerationPropertyTypeAttribute customAttr = null;
             Type type = null;
-            if (isCollection)
+            if (isCollection && !propertyInfo.PropertyType.IsArray)
             {
                 customAttr = (ProtofileGenerationPropertyTypeAttribute)propertyInfo.PropertyType.GenericTypeArguments[0].GetCustomAttribute(typeof(ProtofileGenerationPropertyTypeAttribute), false);
                 type = propertyInfo.PropertyType.GenericTypeArguments[0];
             }
+            else if (isArray)
+            {
+                customAttr = (ProtofileGenerationPropertyTypeAttribute)propertyInfo.GetCustomAttribute(typeof(ProtofileGenerationPropertyTypeAttribute), false);
+                type = propertyInfo.PropertyType.GetElementType();
+            }
 
             else
             {
-                customAttr = (ProtofileGenerationPropertyTypeAttribute)propertyInfo.GetCustomAttribute(typeof(ProtofileGenerationPropertyTypeAttribute), false);
-                type = propertyInfo.PropertyType;
+                if (propertyInfo.PropertyType.IsGenericType &&
+                            propertyInfo.PropertyType.GetGenericTypeDefinition() == typeof(Nullable<>))
+                {
+                    customAttr = (ProtofileGenerationPropertyTypeAttribute)propertyInfo.PropertyType.GenericTypeArguments[0].GetCustomAttribute(typeof(ProtofileGenerationPropertyTypeAttribute), false);
+                    type = propertyInfo.PropertyType.GenericTypeArguments[0];
+                }
+                else
+                {
+                    customAttr = (ProtofileGenerationPropertyTypeAttribute)propertyInfo.GetCustomAttribute(typeof(ProtofileGenerationPropertyTypeAttribute), false);
+                    type = propertyInfo.PropertyType;
+                }
             }
 
 
@@ -146,22 +172,39 @@ namespace ProtobufFileGenerator
                 switch (type.Name)
                 {
                     case "Int32":
+                    case "Int32[]":
+                    case "Int16":
+                    case "Int16[]":
+                    case "Byte":
+                    case "Byte[]":
+                    case "SByte":
+                    case "SByte[]":
                         return "int32";
                     case "String":
+                    case "String[]":
                         return "string";
                     case "DateTime":
+                    case "DateTime[]":
                         return "double";
                     case "Double":
+                    case "Double[]":
+                    case "Decimal":
+                    case "Decimal[]":
                         return "double";
                     case "Single":
+                    case "Single[]":
                         return "float";
                     case "Int64":
+                    case "Int64[]":
                         return "int64";
                     case "UInt32":
+                    case "UInt32[]":
                         return "uint32";
                     case "UInt64":
+                    case "UInt64[]":
                         return "uint64";
                     case "Boolean":
+                    case "Boolean[]":
                         return "bool";
                     default:
                         return type.Name;

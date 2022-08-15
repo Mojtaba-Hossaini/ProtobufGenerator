@@ -4,7 +4,18 @@ namespace ProtobufGenerator;
 
 public class Person
 {
+    public int? NullId { get; set; }
+    public short ShortProp { get; set; }
+    public decimal MyProperty { get; set; }
+    public byte fffff { get; set; }
     public int Id { get; set; }
+    public int[] Ids { get; set; }
+    public bool[] boooooolssss { get; set; }
+
+    [ProtofileGenerationPropertyType("sint32")]
+    public int[] IdsArr { get; set; }
+    public string[] someee { get; set; }
+    public Address[] adddddss { get; set; }
 
     [ProtofileGenerationPropertyType("sint32")]
     public int sint32Propery { get; set; }
@@ -35,4 +46,5 @@ public class Person
     [ProtofileGenerationPropertyType("fixed64")]
     public ulong fixed64Property { get; set; }
     public bool boolProperty { get; set; }
+    public SomeEnume[] enumeeeeeeeee { get; set; }
 }

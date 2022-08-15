@@ -1,4 +1,6 @@
-﻿namespace ProtobufGenerator;
+﻿using ProtobufFileGenerator;
+
+namespace ProtobufGenerator;
 
 [ProtofileGenerationMessageName("NewAddress")]
 public class Address

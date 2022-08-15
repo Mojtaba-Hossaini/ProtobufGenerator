@@ -1,56 +1,102 @@
-﻿using System;
-using System.Collections;
-using System.Globalization;
-using System.Security.AccessControl;
+﻿using System.Collections;
+using System.Reflection;
 using System.Text;
 
 namespace ProtobufGenerator;
 
 public static class GenerateProtobufFromClass
 {
-    public static void GenerateProtobuf<T>(this T model) where T : Type
+    /// <summary>
+    /// Generate proto file from c# class.
+    /// </summary>
+    /// <typeparam name="T">System.Type</typeparam>
+    /// <param name="model">System.Type</param>
+    /// <param name="protoFilePath">Proto file path which will be appended</param>
+    public static void GenerateProtobuf<T>(this T model, string protoFilePath) where T : Type
     {
         List<Type> types = new List<Type>();
+        List<Type> typesAddedToProtoFile = new List<Type>();
+        List<Type> enums = new List<Type>();
         types.Add(model);
         while (types.Count > 0)
         {
             var type = types[0];
+            typesAddedToProtoFile.Add(type);
             var properties = type.GetProperties();
             StringBuilder protoStr = new StringBuilder();
             protoStr.AppendLine();
-            protoStr.AppendLine($"message {type.Name} " + "{");
+            string typeName = GetTypeName(type);
+            protoStr.AppendLine($"message {typeName} " + "{");
             for (int i = 0; i < properties.Length; i++)
             {
+                CheckEnum(enums, properties[i].PropertyType);
                 if (CheckCollection(properties[i]))
                 {
-                    if (CheckSystemType(properties[i].PropertyType.GenericTypeArguments[0]))
-                        AddTypeCamelCase(protoStr, "repeated ", properties[i].PropertyType.GenericTypeArguments[0].Name, properties[i].Name, i + 1);
-                    else
+                    var genericType = properties[i].PropertyType.GenericTypeArguments[0];
+                    CheckEnum(enums, genericType);
+                    if (!CheckSystemType(genericType))
                     {
-                        AddTypePascalCase(protoStr, "repeated ", properties[i].PropertyType.GenericTypeArguments[0].Name, properties[i].Name, i + 1);
-                        if(!types.Contains(properties[i].PropertyType.GenericTypeArguments[0]))
-                            types.Add(properties[i].PropertyType.GenericTypeArguments[0]);
+                        if (!typesAddedToProtoFile.Contains(genericType) && !genericType.IsEnum)
+                        {
+                            types.Add(genericType);
+                            typesAddedToProtoFile.Add(genericType);
+                        }
                     }
-                        
+                    AppendPropertyToString(protoStr, properties[i], i + 1, " repeated", true);
                 }
-                else if (CheckDateTime(properties[i]))
-                    AddTypePascalCase(protoStr, string.Empty, "double", properties[i].Name, i + 1);
-                else if (CheckSystemType(properties[i].PropertyType))
-                    AddTypeCamelCase(protoStr, string.Empty, properties[i].PropertyType.Name, properties[i].Name, i + 1);
                 else
                 {
-                    AddTypePascalCase(protoStr, string.Empty, properties[i].PropertyType.Name, properties[i].Name, i + 1);
-                    if(!types.Contains(properties[i].PropertyType))
-                        types.Add(properties[i].PropertyType);
+                    if (!CheckSystemType(properties[i].PropertyType))
+                    {
+                        if (!typesAddedToProtoFile.Contains(properties[i].PropertyType) && !properties[i].PropertyType.IsEnum)
+                        {
+                            types.Add(properties[i].PropertyType);
+                            typesAddedToProtoFile.Add(properties[i].PropertyType);
+                        }
+                    }
+                    AppendPropertyToString(protoStr, properties[i], i + 1, string.Empty, false);
                 }
-                    
             }
             protoStr.AppendLine("}");
 
-            File.AppendAllText(@"C:\Users\M.Hussaini\Documents\testProto.proto", protoStr.ToString());
+            File.AppendAllText(protoFilePath, protoStr.ToString());
             types.Remove(type);
         }
-        
+        foreach (var item in enums)
+        {
+            var properties = item.GetMembers(BindingFlags.Public | BindingFlags.Static);
+            StringBuilder protoStr = new StringBuilder();
+            protoStr.AppendLine();
+            protoStr.AppendLine($"enum {item.Name} " + "{");
+            for (int i = 0; i < properties.Length; i++)
+            {
+                protoStr.AppendLine($"  {char.ToLower(properties[i].Name[0]) + properties[i].Name[1..]} = {i};");
+            }
+            protoStr.AppendLine("}");
+            File.AppendAllText(protoFilePath, protoStr.ToString());
+        }
+
+    }
+
+    private static string GetTypeName(Type type)
+    {
+        var typeName = "";
+        var customAttr = (ProtofileGenerationMessageNameAttribute)type.GetCustomAttribute(typeof(ProtofileGenerationMessageNameAttribute), false);
+        if (customAttr is not null)
+            typeName = customAttr.TargetMessageName;
+
+        if (string.IsNullOrEmpty(typeName))
+            typeName = type.Name;
+        return typeName;
+    }
+
+    private static void CheckEnum(List<Type> enums, Type propertyType)
+    {
+        if (propertyType.IsEnum)
+        {
+            if (!enums.Contains(propertyType))
+                enums.Add(propertyType);
+        }
     }
 
     private static bool CheckSystemType(Type property)
@@ -58,24 +104,63 @@ public static class GenerateProtobufFromClass
         return property.FullName.StartsWith("System");
     }
 
-    private static void AddTypeCamelCase(StringBuilder protoStr, string preType, string typeName, string propertyName, int num)
+    private static void AppendPropertyToString(StringBuilder protoStr, PropertyInfo propertyInfo, int num, string preTypeName, bool isCollection)
     {
-        protoStr.AppendLine($"  {preType}{char.ToLower(typeName[0]) + typeName[1..]} {char.ToLower(propertyName[0]) + propertyName[1..]} = {num};");
+        protoStr.AppendLine($"  {preTypeName} {GetTypeName(propertyInfo, isCollection)} {char.ToLower(propertyInfo.Name[0]) + propertyInfo.Name[1..]} = {num};");
     }
-
-    private static void AddTypePascalCase(StringBuilder protoStr, string preType, string typeName, string propertyName, int num)
-    {
-        protoStr.AppendLine($"  {preType}{typeName} {char.ToLower(propertyName[0]) + propertyName[1..]} = {num};");
-    }
-
     private static bool CheckCollection(System.Reflection.PropertyInfo property)
     {
         return typeof(IEnumerable).IsAssignableFrom(property.PropertyType) && property.PropertyType != typeof(string);
     }
 
-    private static bool CheckDateTime(System.Reflection.PropertyInfo property)
+    private static string GetTypeName(PropertyInfo propertyInfo, bool isCollection)
     {
-        return typeof(DateTime).IsAssignableFrom(property.PropertyType);
+        ProtofileGenerationPropertyTypeAttribute customAttr = null;
+        Type type = null;
+        if (isCollection)
+        {
+            customAttr = (ProtofileGenerationPropertyTypeAttribute)propertyInfo.PropertyType.GenericTypeArguments[0].GetCustomAttribute(typeof(ProtofileGenerationPropertyTypeAttribute), false);
+            type = propertyInfo.PropertyType.GenericTypeArguments[0];
+        }
+
+        else
+        {
+            customAttr = (ProtofileGenerationPropertyTypeAttribute)propertyInfo.GetCustomAttribute(typeof(ProtofileGenerationPropertyTypeAttribute), false);
+            type = propertyInfo.PropertyType;
+        }
+
+
+
+        if (customAttr is not null)
+        {
+            return customAttr.TargetType;
+        }
+        else
+        {
+            switch (type.Name)
+            {
+                case "Int32":
+                    return "int32";
+                case "String":
+                    return "string";
+                case "DateTime":
+                    return "double";
+                case "Double":
+                    return "double";
+                case "Single":
+                    return "float";
+                case "Int64":
+                    return "int64";
+                case "UInt32":
+                    return "uint32";
+                case "UInt64":
+                    return "uint64";
+                case "Boolean":
+                    return "bool";
+                default:
+                    return type.Name;
+            }
+        }
     }
 
 }

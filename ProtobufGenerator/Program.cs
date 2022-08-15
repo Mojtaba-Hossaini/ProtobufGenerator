@@ -2,6 +2,6 @@
 
 using ProtobufGenerator;
 
-typeof(Person).GenerateProtobuf();
+typeof(Person).GenerateProtobuf(@"C:\Users\M.Hussaini\Documents\testProto.proto");
 
 Console.WriteLine("Hello, World!");

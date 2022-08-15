@@ -10,23 +10,23 @@ use any class type and pass the proto file path to extension method and it will 
 
 You can override default value type generator by using `ProtofileGenerationPropertyType` attribute above any property:
 
-`[ProtofileGenerationPropertyType("sint32")]`
-`public int sint32Value { get; set; }`
+`[ProtofileGenerationPropertyType("sint32")]`<br />
+`public int sint32Value { get; set; }`<br />
 
 and it will generate protofile like this:
 
-`sint32 sint32Value = 1;`
+`sint32 sint32Value = 1;`<br />
 
 You can override default naming message by using ProtofileGenerationMessageName attribute above the c# class:
 
-`[ProtofileGenerationMessageName("NewAddress")]`
-`public class Address`
-`{`
-    `public string Allay { get; set; }`
-`}`
+`[ProtofileGenerationMessageName("NewAddress")]`<br />
+`public class Address`<br />
+`{`<br />
+    `public string Allay { get; set; }`<br />
+`}`<br />
 
-and it will generate message in proto file like this:
+and it will generate message in proto file like this:<br />
 
-`message NewAddress {`
-    `string allay = 1;`
-`}`
+`message NewAddress {`<br />
+    `string allay = 1;`<br />
+`}`<br />
